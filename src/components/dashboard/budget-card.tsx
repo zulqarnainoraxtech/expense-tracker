@@ -90,7 +90,7 @@ export function BudgetCard({
                   Monthly Budget
                 </span>
                 <p className="text-xs text-slate-400 mt-0.5">
-                  Target spending for {displayMonth}
+                  Target spending for <br /> {displayMonth}
                 </p>
               </div>
             </div>
@@ -108,7 +108,7 @@ export function BudgetCard({
                 </>
               ) : (
                 <>
-                  <Plus className="h-3.5 w-3.5" />
+                  {/* <Plus className="h-3.5 w-3.5" /> */}
                   <span>Set Budget</span>
                 </>
               )}
@@ -127,7 +127,7 @@ export function BudgetCard({
                 onClick={handleOpen}
                 className="mt-3 text-xs font-semibold border-[#203154] bg-[#0c1424] text-slate-200 hover:bg-[#15223c]"
               >
-                + Set Monthly Budget
+                 Set Monthly Budget
               </Button>
             </div>
           ) : (

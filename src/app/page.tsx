@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Plus, ReceiptText, WalletCards } from "lucide-react";
+import { ReceiptText, WalletCards } from "lucide-react";
 import { useExpenseTracker } from "@/hooks/use-expense-tracker";
 import { MonthlyHeader } from "@/components/dashboard/monthly-header";
 import { SummaryCards } from "@/components/dashboard/summary-cards";
@@ -12,7 +12,6 @@ import { ExpenseFormDialog } from "@/components/expenses/expense-form-dialog";
 import { IncomeList } from "@/components/income/income-list";
 import { IncomeFormDialog } from "@/components/income/income-form-dialog";
 import { BackupDialog } from "@/components/settings/backup-dialog";
-import { Button } from "@/components/ui/button";
 import { Expense, Income } from "@/types/expense";
 
 export default function Home() {
@@ -129,46 +128,33 @@ export default function Home() {
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
           {/* Left Column: Primary Transactions (Expenses / Income) */}
           <div className="lg:col-span-7 space-y-4">
-            {/* View Switcher Tabs matching screenshot */}
-            <div className="flex items-center justify-between">
-              <div className="inline-flex rounded-xl bg-[#0c1424] border border-[#1b2844] p-1 shadow-xs">
-                <button
-                  type="button"
-                  onClick={() => setActiveTab("expenses")}
-                  className={`flex items-center gap-2 rounded-lg px-4 py-2 text-xs font-bold transition-all cursor-pointer ${
-                    activeTab === "expenses"
-                      ? "bg-[#1d4ed8] text-white shadow-md"
-                      : "text-slate-400 hover:text-white"
-                  }`}
-                >
-                  <ReceiptText className="h-3.5 w-3.5" />
-                  <span>Expenses ({expenses.length})</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setActiveTab("income")}
-                  className={`flex items-center gap-2 rounded-lg px-4 py-2 text-xs font-bold transition-all cursor-pointer ${
-                    activeTab === "income"
-                      ? "bg-[#1d4ed8] text-white shadow-md"
-                      : "text-slate-400 hover:text-white"
-                  }`}
-                >
-                  <WalletCards className="h-3.5 w-3.5" />
-                  <span>Income ({income.length})</span>
-                </button>
-              </div>
-
-              {/* Quick Tab Add Action Pill */}
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={activeTab === "expenses" ? handleOpenAddExpense : handleOpenAddIncome}
-                className="h-9 px-3.5 text-xs font-semibold border-[#203154] bg-[#0c1424] text-slate-200 hover:bg-[#15223c]"
+            {/* View Switcher Tabs taking full width */}
+            <div className="w-full grid grid-cols-2 rounded-xl bg-[#0c1424] border border-[#1b2844] p-1 shadow-xs gap-1">
+              <button
+                type="button"
+                onClick={() => setActiveTab("expenses")}
+                className={`flex items-center justify-center gap-2 rounded-lg px-4 py-3 text-xs font-bold transition-all cursor-pointer ${
+                  activeTab === "expenses"
+                    ? "bg-[#1d4ed8] text-white shadow-md"
+                    : "text-slate-400 hover:text-white"
+                }`}
               >
-                <Plus className="h-3.5 w-3.5 mr-1" />
-                <span>Add</span>
-              </Button>
+                <ReceiptText className="h-3.5 w-3.5" />
+                <span>Expenses ({expenses.length})</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setActiveTab("income")}
+                className={`flex items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-xs font-bold transition-all cursor-pointer ${
+                  activeTab === "income"
+                    ? "bg-[#1d4ed8] text-white shadow-md"
+                    : "text-slate-400 hover:text-white"
+                }`}
+              >
+                <WalletCards className="h-3.5 w-3.5" />
+                <span>Income ({income.length})</span>
+              </button>
             </div>
 
             {/* List for Active Tab */}
@@ -212,18 +198,7 @@ export default function Home() {
         </div>
       </main>
 
-      {/* Floating Action Button for Mobile screens */}
-      <div className="sm:hidden fixed bottom-5 right-5 z-40">
-        <Button
-          variant="primary"
-          size="lg"
-          onClick={handleOpenAddExpense}
-          className="rounded-full shadow-xl h-12 px-5 text-sm font-bold flex items-center gap-2 bg-[#00d68f] text-slate-950"
-        >
-          <Plus className="h-5 w-5" />
-          <span>Add Expense</span>
-        </Button>
-      </div>
+
 
       {/* Dialogs */}
       <ExpenseFormDialog
