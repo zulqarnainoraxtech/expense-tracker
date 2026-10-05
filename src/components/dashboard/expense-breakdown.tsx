@@ -64,7 +64,6 @@ function CustomTooltip({ active, payload }: CustomTooltipProps) {
         </div>
         <div className="flex items-baseline justify-between gap-4">
           <span className="text-slate-400">Share:</span>
-          
           <span className="font-bold text-[#00d68f]">
             {item.percentage}%
           </span>
