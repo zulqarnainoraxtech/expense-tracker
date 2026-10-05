@@ -65,13 +65,13 @@ export function MonthlyHeader({
           </div>
 
           {/* Month Navigation & Action Buttons */}
-          <div className="flex flex-wrap items-center justify-between md:justify-end gap-2.5">
-            {/* Month Navigator Pill */}
-            <div className="inline-flex items-center rounded-xl border border-[#203154] bg-[#0c1424] p-1 shadow-xs">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between md:justify-end gap-2.5 w-full sm:w-auto">
+            {/* Month Navigator Pill - full width on mobile, auto on desktop */}
+            <div className="flex sm:inline-flex items-center justify-between sm:justify-start rounded-xl border border-[#203154] bg-[#0c1424] p-1 shadow-xs w-full sm:w-auto">
               <button
                 type="button"
                 onClick={onPrevMonth}
-                className="h-7 w-7 rounded-lg text-slate-400 hover:text-white hover:bg-[#15223c] flex items-center justify-center transition-colors cursor-pointer"
+                className="h-7 w-7 rounded-lg text-slate-400 hover:text-white hover:bg-[#15223c] flex items-center justify-center transition-colors cursor-pointer shrink-0"
                 title="Previous Month"
               >
                 <ChevronLeft className="h-4 w-4" />
@@ -81,17 +81,17 @@ export function MonthlyHeader({
               <button
                 type="button"
                 onClick={onCurrentMonth}
-                className="px-3 py-1 text-xs font-semibold text-slate-200 hover:text-white flex items-center gap-2 transition-colors cursor-pointer"
+                className="flex-1 sm:flex-initial px-3 py-1 text-xs font-semibold text-slate-200 hover:text-white flex items-center justify-center gap-2 transition-colors cursor-pointer"
                 title="Click to jump to current month"
               >
-                <Calendar className="h-3.5 w-3.5 text-slate-400" />
+                <Calendar className="h-3.5 w-3.5 text-slate-400 shrink-0" />
                 <span>{displayMonth}</span>
               </button>
 
               <button
                 type="button"
                 onClick={onNextMonth}
-                className="h-7 w-7 rounded-lg text-slate-400 hover:text-white hover:bg-[#15223c] flex items-center justify-center transition-colors cursor-pointer"
+                className="h-7 w-7 rounded-lg text-slate-400 hover:text-white hover:bg-[#15223c] flex items-center justify-center transition-colors cursor-pointer shrink-0"
                 title="Next Month"
               >
                 <ChevronRight className="h-4 w-4" />
@@ -99,8 +99,8 @@ export function MonthlyHeader({
               </button>
             </div>
 
-            {/* Action buttons */}
-            <div className="flex items-center gap-2">
+            {/* Action buttons - 50% width each on mobile, auto on desktop */}
+            <div className="grid grid-cols-2 sm:flex items-center gap-2 w-full sm:w-auto">
               <Button
                 variant="outline"
                 size="sm"
@@ -116,7 +116,7 @@ export function MonthlyHeader({
                 variant="outline"
                 size="sm"
                 onClick={onAddIncome}
-                className="text-xs font-semibold border-emerald-500/30 bg-emerald-500/10 text-[#00d68f] hover:bg-emerald-500/20 hover:text-[#00e676]"
+                className="w-full sm:w-auto text-xs font-semibold border-emerald-500/30 bg-emerald-500/10 text-[#00d68f] hover:bg-emerald-500/20 hover:text-[#00e676]"
               >
                 <Plus className="h-3.5 w-3.5 mr-0.5" />
                 <span>Income</span>
@@ -126,13 +126,13 @@ export function MonthlyHeader({
                 variant="primary"
                 size="sm"
                 onClick={onAddExpense}
-                className="text-xs font-bold"
+                className="w-full sm:w-auto text-xs font-bold"
               >
                 <Plus className="h-3.5 w-3.5 mr-0.5" />
                 <span>Expense</span>
               </Button>
 
-              <div className="hidden sm:flex h-9 w-9 rounded-xl border border-[#203154] bg-[#0c1424] text-slate-300 items-center justify-center">
+              <div className="hidden sm:flex h-9 w-9 rounded-xl border border-[#203154] bg-[#0c1424] text-slate-300 items-center justify-center shrink-0">
                 <User className="h-4 w-4" />
               </div>
             </div>
