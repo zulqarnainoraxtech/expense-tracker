@@ -16,7 +16,7 @@ interface BackupDialogProps {
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
   onExport: () => void;
-  onImport: (jsonData: unknown) => { success: boolean; error?: string };
+  onImport: (jsonData: unknown) => { success: boolean; error?: string } | Promise<{ success: boolean; error?: string }>;
 }
 
 export function BackupDialog({
@@ -56,9 +56,9 @@ export function BackupDialog({
     e.target.value = "";
   };
 
-  const executeImport = () => {
+  const executeImport = async () => {
     if (!pendingData) return;
-    const res = onImport(pendingData);
+    const res = await onImport(pendingData);
     if (res.success) {
       setImportStatus({
         type: "success",
