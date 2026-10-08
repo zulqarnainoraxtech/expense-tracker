@@ -8,17 +8,14 @@ import {
   ExpenseTrackerData,
 } from "@/types/expense";
 import {
-  getStoredData,
-  saveStoredData,
+  clearLegacyLocalStorage,
   getMonthData,
   validateImportData,
 } from "@/lib/storage";
 import {
-  fetchExpensesApi,
   createExpenseApi,
   updateExpenseApi,
   deleteExpenseApi,
-  fetchIncomeApi,
   createIncomeApi,
   updateIncomeApi,
   deleteIncomeApi,
@@ -47,58 +44,35 @@ export function formatMonthDisplay(monthKey: string): string {
 
 export function useExpenseTracker() {
   const [isLoaded, setIsLoaded] = useState(false);
+  const [dbError, setDbError] = useState<string | null>(null);
   const [currentMonth, setCurrentMonth] = useState<string>(() => getCurrentMonthKey());
   const [data, setData] = useState<ExpenseTrackerData>({});
   const [isSyncing, setIsSyncing] = useState(false);
 
-  // Load from MongoDB Atlas on mount, falling back gracefully to localStorage if offline
-  useEffect(() => {
-    let isMounted = true;
+  // Clear any legacy localStorage and load exclusively from MongoDB Atlas
+  const loadDatabaseData = useCallback(async () => {
+    setIsLoaded(false);
+    setDbError(null);
 
-    async function initializeData() {
-      // 1. Initial fast display from localStorage
-      const localData = getStoredData();
-      if (isMounted && Object.keys(localData).length > 0) {
-        setData(localData);
-      }
+    // Delete any old localStorage data to ensure no offline/stale cache is used
+    clearLegacyLocalStorage();
 
-      // 2. Fetch fresh source-of-truth from MongoDB Atlas
-      try {
-        const dbData = await fetchAllSyncDataApi();
-        if (!isMounted) return;
-
-        // If DB has data, load it into state and cache in localStorage
-        if (Object.keys(dbData).length > 0) {
-          setData(dbData);
-          saveStoredData(dbData);
-        } else if (Object.keys(localData).length > 0) {
-          // If DB is brand new/empty but user had existing local data, migrate local data to Atlas
-          await syncAllDataToApi(localData).catch(console.error);
-        }
-      } catch (err) {
-        console.warn("Could not connect to MongoDB Atlas backend, using local cache:", err);
-      } finally {
-        if (isMounted) {
-          setIsLoaded(true);
-        }
-      }
+    try {
+      const dbData = await fetchAllSyncDataApi();
+      setData(dbData || {});
+      setDbError(null);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to connect to database";
+      console.error("Database connection error:", message);
+      setDbError(message);
+    } finally {
+      setIsLoaded(true);
     }
-
-    initializeData();
-
-    return () => {
-      isMounted = false;
-    };
   }, []);
 
-  // Update in-memory state and local cache
-  const updateStore = useCallback((updater: (prev: ExpenseTrackerData) => ExpenseTrackerData) => {
-    setData((prev) => {
-      const next = updater(prev);
-      saveStoredData(next);
-      return next;
-    });
-  }, []);
+  useEffect(() => {
+    loadDatabaseData();
+  }, [loadDatabaseData]);
 
   // Navigation handlers
   const goToPrevMonth = useCallback(() => {
@@ -188,77 +162,44 @@ export function useExpenseTracker() {
     return currentMonth;
   };
 
-  // CRUD for Expenses (Database + Local Store)
+  // CRUD for Expenses (Database only)
   const addExpense = useCallback(
     async (expenseData: Omit<Expense, "id" | "createdAt">) => {
-      // Optimistic temporary item
-      const tempId = typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : `exp-${Date.now()}`;
-      const tempExpense: Expense = {
-        ...expenseData,
-        id: tempId,
-        createdAt: new Date().toISOString(),
-      };
+      // Direct call to MongoDB Atlas API
+      const created = await createExpenseApi(expenseData);
+      const targetMonth = getMonthKeyFromDate(created.date);
 
-      const targetMonth = getMonthKeyFromDate(tempExpense.date);
-
-      updateStore((prev) => {
+      setData((prev) => {
         const existingMonth = getMonthData(prev, targetMonth);
         return {
           ...prev,
           [targetMonth]: {
             ...existingMonth,
-            expenses: [tempExpense, ...existingMonth.expenses],
+            expenses: [created, ...existingMonth.expenses.filter((e) => e.id !== created.id)],
           },
         };
       });
 
-      // Save to MongoDB Atlas via API
-      try {
-        const created = await createExpenseApi(expenseData);
-        // Replace optimistic item with server MongoDB document
-        updateStore((prev) => {
-          const existingMonth = getMonthData(prev, targetMonth);
-          return {
-            ...prev,
-            [targetMonth]: {
-              ...existingMonth,
-              expenses: existingMonth.expenses.map((e) => (e.id === tempId ? created : e)),
-            },
-          };
-        });
-        return created;
-      } catch (err) {
-        console.error("Failed to persist expense to MongoDB Atlas:", err);
-        return tempExpense;
-      }
+      return created;
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [updateStore, currentMonth]
+    [currentMonth]
   );
 
   const updateExpense = useCallback(
     async (id: string, updated: Partial<Omit<Expense, "id" | "createdAt">>) => {
-      updateStore((prev) => {
-        let foundExpense: Expense | undefined;
-        let originalMonth = currentMonth;
+      const saved = await updateExpenseApi(id, updated);
 
+      setData((prev) => {
+        let originalMonth = currentMonth;
         for (const [mKey, mVal] of Object.entries(prev)) {
-          const match = mVal.expenses.find((e) => e.id === id);
-          if (match) {
-            foundExpense = match;
+          if (mVal.expenses.some((e) => e.id === id)) {
             originalMonth = mKey;
             break;
           }
         }
 
-        if (!foundExpense) return prev;
-
-        const merged: Expense = {
-          ...foundExpense,
-          ...updated,
-        };
-
-        const targetMonth = getMonthKeyFromDate(merged.date);
+        const targetMonth = getMonthKeyFromDate(saved.date);
 
         if (targetMonth === originalMonth) {
           const monthObj = getMonthData(prev, originalMonth);
@@ -266,7 +207,7 @@ export function useExpenseTracker() {
             ...prev,
             [originalMonth]: {
               ...monthObj,
-              expenses: monthObj.expenses.map((e) => (e.id === id ? merged : e)),
+              expenses: monthObj.expenses.map((e) => (e.id === id ? saved : e)),
             },
           };
         } else {
@@ -281,24 +222,23 @@ export function useExpenseTracker() {
             },
             [targetMonth]: {
               ...destMonthObj,
-              expenses: [merged, ...destMonthObj.expenses],
+              expenses: [saved, ...destMonthObj.expenses.filter((e) => e.id !== id)],
             },
           };
         }
       });
 
-      // Call database update if ID is a valid MongoDB ObjectId
-      if (/^[0-9a-fA-F]{24}$/.test(id)) {
-        await updateExpenseApi(id, updated).catch(console.error);
-      }
+      return saved;
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [updateStore, currentMonth]
+    [currentMonth]
   );
 
   const deleteExpense = useCallback(
     async (id: string) => {
-      updateStore((prev) => {
+      await deleteExpenseApi(id);
+
+      setData((prev) => {
         const next = { ...prev };
         let modified = false;
 
@@ -315,82 +255,47 @@ export function useExpenseTracker() {
 
         return modified ? next : prev;
       });
-
-      if (/^[0-9a-fA-F]{24}$/.test(id)) {
-        await deleteExpenseApi(id).catch(console.error);
-      }
     },
-    [updateStore]
+    []
   );
 
-  // CRUD for Income (Database + Local Store)
+  // CRUD for Income (Database only)
   const addIncome = useCallback(
     async (incomeData: Omit<Income, "id" | "createdAt">) => {
-      const tempId = typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : `inc-${Date.now()}`;
-      const tempIncome: Income = {
-        ...incomeData,
-        id: tempId,
-        createdAt: new Date().toISOString(),
-      };
+      const created = await createIncomeApi(incomeData);
+      const targetMonth = getMonthKeyFromDate(created.date);
 
-      const targetMonth = getMonthKeyFromDate(tempIncome.date);
-
-      updateStore((prev) => {
+      setData((prev) => {
         const existingMonth = getMonthData(prev, targetMonth);
         return {
           ...prev,
           [targetMonth]: {
             ...existingMonth,
-            income: [tempIncome, ...existingMonth.income],
+            income: [created, ...existingMonth.income.filter((i) => i.id !== created.id)],
           },
         };
       });
 
-      try {
-        const created = await createIncomeApi(incomeData);
-        updateStore((prev) => {
-          const existingMonth = getMonthData(prev, targetMonth);
-          return {
-            ...prev,
-            [targetMonth]: {
-              ...existingMonth,
-              income: existingMonth.income.map((i) => (i.id === tempId ? created : i)),
-            },
-          };
-        });
-        return created;
-      } catch (err) {
-        console.error("Failed to persist income to MongoDB Atlas:", err);
-        return tempIncome;
-      }
+      return created;
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [updateStore, currentMonth]
+    [currentMonth]
   );
 
   const updateIncome = useCallback(
     async (id: string, updated: Partial<Omit<Income, "id" | "createdAt">>) => {
-      updateStore((prev) => {
-        let foundIncome: Income | undefined;
-        let originalMonth = currentMonth;
+      const saved = await updateIncomeApi(id, updated);
 
+      setData((prev) => {
+        let originalMonth = currentMonth;
         for (const [mKey, mVal] of Object.entries(prev)) {
-          const match = mVal.income.find((i) => i.id === id);
-          if (match) {
-            foundIncome = match;
+          if (mVal.income.some((i) => i.id === id)) {
             originalMonth = mKey;
             break;
           }
         }
 
-        if (!foundIncome) return prev;
-
-        const merged: Income = {
-          ...foundIncome,
-          ...updated,
-        };
-
-        const targetMonth = getMonthKeyFromDate(merged.date);
+        const targetMonth = getMonthKeyFromDate(saved.date);
 
         if (targetMonth === originalMonth) {
           const monthObj = getMonthData(prev, originalMonth);
@@ -398,7 +303,7 @@ export function useExpenseTracker() {
             ...prev,
             [originalMonth]: {
               ...monthObj,
-              income: monthObj.income.map((i) => (i.id === id ? merged : i)),
+              income: monthObj.income.map((i) => (i.id === id ? saved : i)),
             },
           };
         } else {
@@ -413,23 +318,23 @@ export function useExpenseTracker() {
             },
             [targetMonth]: {
               ...destMonthObj,
-              income: [merged, ...destMonthObj.income],
+              income: [saved, ...destMonthObj.income.filter((i) => i.id !== id)],
             },
           };
         }
       });
 
-      if (/^[0-9a-fA-F]{24}$/.test(id)) {
-        await updateIncomeApi(id, updated).catch(console.error);
-      }
+      return saved;
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [updateStore, currentMonth]
+    [currentMonth]
   );
 
   const deleteIncome = useCallback(
     async (id: string) => {
-      updateStore((prev) => {
+      await deleteIncomeApi(id);
+
+      setData((prev) => {
         const next = { ...prev };
         let modified = false;
 
@@ -446,18 +351,18 @@ export function useExpenseTracker() {
 
         return modified ? next : prev;
       });
-
-      if (/^[0-9a-fA-F]{24}$/.test(id)) {
-        await deleteIncomeApi(id).catch(console.error);
-      }
     },
-    [updateStore]
+    []
   );
 
-  // Budget management
+  // Budget management (Database only)
   const setBudget = useCallback(
     async (amount: number | undefined) => {
-      updateStore((prev) => {
+      if (amount !== undefined) {
+        await saveBudgetApi(currentMonth, amount);
+      }
+
+      setData((prev) => {
         const existingMonth = getMonthData(prev, currentMonth);
         return {
           ...prev,
@@ -467,15 +372,11 @@ export function useExpenseTracker() {
           },
         };
       });
-
-      if (amount !== undefined) {
-        await saveBudgetApi(currentMonth, amount).catch(console.error);
-      }
     },
-    [updateStore, currentMonth]
+    [currentMonth]
   );
 
-  // Backup / Restore
+  // Backup / Restore (Backed by Database)
   const exportBackupJSON = useCallback(() => {
     const jsonStr = JSON.stringify(data, null, 2);
     const blob = new Blob([jsonStr], { type: "application/json" });
@@ -500,22 +401,26 @@ export function useExpenseTracker() {
       setIsSyncing(true);
       try {
         await syncAllDataToApi(validation.data);
-        updateStore(() => validation.data!);
+        const freshData = await fetchAllSyncDataApi();
+        setData(freshData || {});
         return { success: true };
       } catch (err) {
         console.error("Failed to sync imported backup to database:", err);
-        // Still save locally even if network fails
-        updateStore(() => validation.data!);
-        return { success: true };
+        return {
+          success: false,
+          error: err instanceof Error ? err.message : "Failed to sync backup to MongoDB",
+        };
       } finally {
         setIsSyncing(false);
       }
     },
-    [updateStore]
+    []
   );
 
   return {
     isLoaded,
+    dbError,
+    refreshData: loadDatabaseData,
     isSyncing,
     currentMonth,
     setCurrentMonth,

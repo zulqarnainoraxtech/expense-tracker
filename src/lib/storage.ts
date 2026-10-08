@@ -3,63 +3,20 @@ import { ExpenseTrackerData, MonthlyData } from "@/types/expense";
 export const STORAGE_KEY = "expense-tracker-data";
 
 /**
- * Safely retrieves all expense tracker data from localStorage.
- * Returns an empty object if running on the server or if stored data is empty/corrupt.
+ * Removes any legacy or stale data stored in localStorage so that
+ * all data is strictly fetched from and stored in MongoDB Atlas.
  */
-export function getStoredData(): ExpenseTrackerData {
-  if (typeof window === "undefined") {
-    return {};
-  }
-
+export function clearLegacyLocalStorage(): void {
+  if (typeof window === "undefined") return;
   try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (!raw) {
-      return {};
-    }
-
-    const parsed = JSON.parse(raw);
-    if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
-      console.warn("Invalid data structure in localStorage, returning empty data.");
-      return {};
-    }
-
-    // Validate that monthly keys contain valid objects
-    const cleaned: ExpenseTrackerData = {};
-    for (const [monthKey, value] of Object.entries(parsed)) {
-      if (value && typeof value === "object" && !Array.isArray(value)) {
-        const valObj = value as Record<string, unknown>;
-        cleaned[monthKey] = {
-          income: Array.isArray(valObj.income) ? (valObj.income as MonthlyData["income"]) : [],
-          expenses: Array.isArray(valObj.expenses) ? (valObj.expenses as MonthlyData["expenses"]) : [],
-          budget: typeof valObj.budget === "number" ? valObj.budget : undefined,
-        };
-      }
-    }
-
-    return cleaned;
+    window.localStorage.removeItem(STORAGE_KEY);
   } catch (error) {
-    console.error("Failed to parse expense tracker data from localStorage:", error);
-    return {};
+    console.warn("Could not clear legacy localStorage item:", error);
   }
 }
 
 /**
- * Saves all tracker data to localStorage.
- */
-export function saveStoredData(data: ExpenseTrackerData): boolean {
-  if (typeof window === "undefined") return false;
-
-  try {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-    return true;
-  } catch (error) {
-    console.error("Failed to save expense tracker data to localStorage:", error);
-    return false;
-  }
-}
-
-/**
- * Retrieves data for a specific month (e.g. "2026-10").
+ * Retrieves data for a specific month (e.g. "2026-10") from in-memory state.
  */
 export function getMonthData(data: ExpenseTrackerData, monthKey: string): MonthlyData {
   const existing = data[monthKey];
@@ -79,7 +36,7 @@ export function getMonthData(data: ExpenseTrackerData, monthKey: string): Monthl
 }
 
 /**
- * Validates external JSON data before importing.
+ * Validates external JSON data before importing to MongoDB.
  */
 export function validateImportData(jsonContent: unknown): { isValid: boolean; data?: ExpenseTrackerData; error?: string } {
   if (!jsonContent || typeof jsonContent !== "object" || Array.isArray(jsonContent)) {

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { ReceiptText, WalletCards } from "lucide-react";
+import { ReceiptText, WalletCards, AlertTriangle, RefreshCw } from "lucide-react";
 import { useExpenseTracker } from "@/hooks/use-expense-tracker";
 import { MonthlyHeader } from "@/components/dashboard/monthly-header";
 import { SummaryCards } from "@/components/dashboard/summary-cards";
@@ -17,6 +17,8 @@ import { Expense, Income } from "@/types/expense";
 export default function Home() {
   const {
     isLoaded,
+    dbError,
+    refreshData,
     currentMonth,
     displayMonth,
     goToPrevMonth,
@@ -63,11 +65,11 @@ export default function Home() {
     setIsExpenseDialogOpen(true);
   };
 
-  const handleExpenseSubmit = (expenseData: Omit<Expense, "id" | "createdAt">) => {
+  const handleExpenseSubmit = async (expenseData: Omit<Expense, "id" | "createdAt">) => {
     if (editingExpense) {
-      updateExpense(editingExpense.id, expenseData);
+      await updateExpense(editingExpense.id, expenseData);
     } else {
-      addExpense(expenseData);
+      await addExpense(expenseData);
     }
   };
 
@@ -82,11 +84,11 @@ export default function Home() {
     setIsIncomeDialogOpen(true);
   };
 
-  const handleIncomeSubmit = (incomeData: Omit<Income, "id" | "createdAt">) => {
+  const handleIncomeSubmit = async (incomeData: Omit<Income, "id" | "createdAt">) => {
     if (editingIncome) {
-      updateIncome(editingIncome.id, incomeData);
+      await updateIncome(editingIncome.id, incomeData);
     } else {
-      addIncome(incomeData);
+      await addIncome(incomeData);
     }
   };
 
@@ -95,7 +97,7 @@ export default function Home() {
       <div className="flex-1 flex items-center justify-center min-h-[70vh]">
         <div className="flex flex-col items-center gap-3">
           <div className="h-8 w-8 animate-spin rounded-full border-2 border-[#00d68f] border-t-transparent" />
-          <p className="text-xs font-semibold text-slate-400">Loading your expenses...</p>
+          <p className="text-xs font-semibold text-slate-400">Connecting to MongoDB Database...</p>
         </div>
       </div>
     );
@@ -116,6 +118,26 @@ export default function Home() {
 
       {/* Main Content Dashboard */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+        {/* Database Connection Warning Banner if DB Error */}
+        {dbError && (
+          <div className="rounded-xl border border-rose-500/30 bg-rose-950/40 p-4 text-rose-200 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 shadow-lg">
+            <div className="flex items-start gap-3">
+              <AlertTriangle className="h-5 w-5 text-rose-400 shrink-0 mt-0.5" />
+              <div>
+                <p className="text-sm font-semibold text-rose-200">MongoDB Atlas Connection Error</p>
+                <p className="text-xs text-rose-300/80 mt-0.5 leading-relaxed">{dbError}</p>
+              </div>
+            </div>
+            <button
+              onClick={() => refreshData()}
+              className="flex items-center justify-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold shrink-0 cursor-pointer transition-colors"
+            >
+              <RefreshCw className="h-3.5 w-3.5" />
+              <span>Retry Connection</span>
+            </button>
+          </div>
+        )}
+
         {/* 3 Summary Cards with rich color gradients */}
         <SummaryCards
           totalIncome={totalIncome}
@@ -197,8 +219,6 @@ export default function Home() {
           </div>
         </div>
       </main>
-
-
 
       {/* Dialogs */}
       <ExpenseFormDialog

@@ -19,7 +19,7 @@ import { Income } from "@/types/expense";
 interface IncomeFormDialogProps {
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
-  onSubmit: (data: Omit<Income, "id" | "createdAt">) => void;
+  onSubmit: (data: Omit<Income, "id" | "createdAt">) => Promise<unknown> | void;
   editingIncome?: Income | null;
   defaultDate?: string;
 }
@@ -36,10 +36,14 @@ export function IncomeFormDialog({
   const [customSource, setCustomSource] = useState("");
   const [date, setDate] = useState("");
   const [note, setNote] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [serverError, setServerError] = useState<string | null>(null);
   const [errors, setErrors] = useState<{ amount?: string; source?: string; date?: string }>({});
 
   useEffect(() => {
     if (isOpen) {
+      setServerError(null);
+      setIsSubmitting(false);
       if (editingIncome) {
         setAmount(String(editingIncome.amount));
         if (INCOME_SOURCES.includes(editingIncome.source)) {
@@ -73,7 +77,7 @@ export function IncomeFormDialog({
     }
   }, [isOpen, editingIncome, defaultDate]);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     const newErrors: { amount?: string; source?: string; date?: string } = {};
@@ -97,14 +101,22 @@ export function IncomeFormDialog({
       return;
     }
 
-    onSubmit({
-      amount: parsedAmount,
-      source: finalSource,
-      date,
-      note: note.trim() || undefined,
-    });
-
-    onOpenChange(false);
+    try {
+      setIsSubmitting(true);
+      setServerError(null);
+      await onSubmit({
+        amount: parsedAmount,
+        source: finalSource,
+        date,
+        note: note.trim() || undefined,
+      });
+      onOpenChange(false);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Failed to save to database";
+      setServerError(msg);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -112,13 +124,20 @@ export function IncomeFormDialog({
       <DialogContent className="sm:max-w-md">
         <form onSubmit={handleSubmit} className="space-y-4">
           <DialogHeader>
-            <DialogTitle>{editingIncome ? "Edit Income" : "Add Monthly Income"}</DialogTitle>
+            <DialogTitle>{editingIncome ? "Edit Income" : "Add Income"}</DialogTitle>
             <DialogDescription>
               {editingIncome
-                ? "Update your income entry."
-                : "Record monthly earnings (salary, freelancing, investments) in PKR."}
+                ? "Update your income entry in MongoDB."
+                : "Add earnings or incoming money directly to MongoDB (PKR)."}
             </DialogDescription>
           </DialogHeader>
+
+          {serverError && (
+            <div className="rounded-lg bg-rose-500/15 border border-rose-500/30 p-3 text-xs text-rose-300">
+              <span className="font-semibold block mb-0.5">Database Error:</span>
+              {serverError}
+            </div>
+          )}
 
           {/* Amount Field */}
           <div className="space-y-1.5">
@@ -132,8 +151,9 @@ export function IncomeFormDialog({
                 type="number"
                 step="any"
                 min="0.01"
-                placeholder="e.g. 120000"
+                placeholder="e.g. 75000"
                 value={amount}
+                disabled={isSubmitting}
                 onChange={(e) => {
                   setAmount(e.target.value);
                   if (errors.amount) setErrors((prev) => ({ ...prev, amount: undefined }));
@@ -147,12 +167,13 @@ export function IncomeFormDialog({
             )}
           </div>
 
-          {/* Income Source */}
+          {/* Source Field */}
           <div className="space-y-1.5">
-            <Label htmlFor="income-source">Income Source *</Label>
+            <Label htmlFor="income-source">Source *</Label>
             <Select
               id="income-source"
               value={source}
+              disabled={isSubmitting}
               onChange={(e) => {
                 setSource(e.target.value);
                 if (errors.source) setErrors((prev) => ({ ...prev, source: undefined }));
@@ -166,14 +187,17 @@ export function IncomeFormDialog({
             </Select>
 
             {source === "Other" && (
-              <Input
-                type="text"
-                placeholder="Specify income source (e.g. Rental income)"
-                value={customSource}
-                onChange={(e) => setCustomSource(e.target.value)}
-                className="mt-2 text-xs"
-              />
+              <div className="pt-2">
+                <Input
+                  placeholder="Specify source name..."
+                  value={customSource}
+                  disabled={isSubmitting}
+                  onChange={(e) => setCustomSource(e.target.value)}
+                  maxLength={50}
+                />
+              </div>
             )}
+
             {errors.source && (
               <p className="text-xs text-rose-600 dark:text-rose-400">{errors.source}</p>
             )}
@@ -186,6 +210,7 @@ export function IncomeFormDialog({
               id="income-date"
               type="date"
               value={date}
+              disabled={isSubmitting}
               onChange={(e) => {
                 setDate(e.target.value);
                 if (errors.date) setErrors((prev) => ({ ...prev, date: undefined }));
@@ -196,14 +221,15 @@ export function IncomeFormDialog({
             )}
           </div>
 
-          {/* Optional Note */}
+          {/* Note Field */}
           <div className="space-y-1.5">
-            <Label htmlFor="income-note">Optional Note</Label>
+            <Label htmlFor="income-note">Description / Note (Optional)</Label>
             <Input
               id="income-note"
               type="text"
-              placeholder="e.g. Monthly salary, Upwork payout"
+              placeholder="e.g. Monthly salary, Freelance design contract"
               value={note}
+              disabled={isSubmitting}
               onChange={(e) => setNote(e.target.value)}
               maxLength={120}
             />
@@ -213,13 +239,18 @@ export function IncomeFormDialog({
             <Button
               type="button"
               variant="outline"
+              disabled={isSubmitting}
               onClick={() => onOpenChange(false)}
               className="text-xs"
             >
               Cancel
             </Button>
-            <Button type="submit" variant="primary" className="text-xs">
-              {editingIncome ? "Save Changes" : "Save Income"}
+            <Button type="submit" variant="primary" disabled={isSubmitting} className="text-xs">
+              {isSubmitting
+                ? "Saving to Database..."
+                : editingIncome
+                ? "Save Changes"
+                : "Save Income"}
             </Button>
           </DialogFooter>
         </form>

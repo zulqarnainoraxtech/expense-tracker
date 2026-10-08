@@ -19,7 +19,7 @@ import { Expense } from "@/types/expense";
 interface ExpenseFormDialogProps {
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
-  onSubmit: (data: Omit<Expense, "id" | "createdAt">) => void;
+  onSubmit: (data: Omit<Expense, "id" | "createdAt">) => Promise<unknown> | void;
   editingExpense?: Expense | null;
   defaultDate?: string;
 }
@@ -35,11 +35,15 @@ export function ExpenseFormDialog({
   const [category, setCategory] = useState("Food");
   const [date, setDate] = useState("");
   const [note, setNote] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [serverError, setServerError] = useState<string | null>(null);
   const [errors, setErrors] = useState<{ amount?: string; category?: string; date?: string }>({});
 
   // Reset form when dialog opens or editingExpense changes
   useEffect(() => {
     if (isOpen) {
+      setServerError(null);
+      setIsSubmitting(false);
       if (editingExpense) {
         setAmount(String(editingExpense.amount));
         setCategory(editingExpense.category || "Food");
@@ -49,7 +53,6 @@ export function ExpenseFormDialog({
         setAmount("");
         setCategory("Food");
         const todayStr = new Date().toISOString().slice(0, 10);
-        // If defaultDate provided matches YYYY-MM, use it with current day or 01
         if (defaultDate && defaultDate.length === 7) {
           const now = new Date();
           const currentMonthPrefix = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
@@ -67,7 +70,7 @@ export function ExpenseFormDialog({
     }
   }, [isOpen, editingExpense, defaultDate]);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     const newErrors: { amount?: string; category?: string; date?: string } = {};
@@ -90,14 +93,22 @@ export function ExpenseFormDialog({
       return;
     }
 
-    onSubmit({
-      amount: parsedAmount,
-      category,
-      date,
-      note: note.trim() || undefined,
-    });
-
-    onOpenChange(false);
+    try {
+      setIsSubmitting(true);
+      setServerError(null);
+      await onSubmit({
+        amount: parsedAmount,
+        category,
+        date,
+        note: note.trim() || undefined,
+      });
+      onOpenChange(false);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Failed to save to database";
+      setServerError(msg);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const selectedCategoryConfig = getCategoryConfig(category);
@@ -113,10 +124,17 @@ export function ExpenseFormDialog({
             </DialogTitle>
             <DialogDescription>
               {editingExpense
-                ? "Update the expense details below."
-                : "Record an expense for this month in Pakistani Rupees (PKR)."}
+                ? "Update the expense details in MongoDB."
+                : "Record an expense directly in your MongoDB database (PKR)."}
             </DialogDescription>
           </DialogHeader>
+
+          {serverError && (
+            <div className="rounded-lg bg-rose-500/15 border border-rose-500/30 p-3 text-xs text-rose-300">
+              <span className="font-semibold block mb-0.5">Database Error:</span>
+              {serverError}
+            </div>
+          )}
 
           {/* Amount Field */}
           <div className="space-y-1.5">
@@ -132,6 +150,7 @@ export function ExpenseFormDialog({
                 min="0.01"
                 placeholder="e.g. 1500"
                 value={amount}
+                disabled={isSubmitting}
                 onChange={(e) => {
                   setAmount(e.target.value);
                   if (errors.amount) setErrors((prev) => ({ ...prev, amount: undefined }));
@@ -157,6 +176,7 @@ export function ExpenseFormDialog({
               <Select
                 id="expense-category"
                 value={category}
+                disabled={isSubmitting}
                 onChange={(e) => {
                   setCategory(e.target.value);
                   if (errors.category) setErrors((prev) => ({ ...prev, category: undefined }));
@@ -181,6 +201,7 @@ export function ExpenseFormDialog({
               id="expense-date"
               type="date"
               value={date}
+              disabled={isSubmitting}
               onChange={(e) => {
                 setDate(e.target.value);
                 if (errors.date) setErrors((prev) => ({ ...prev, date: undefined }));
@@ -199,6 +220,7 @@ export function ExpenseFormDialog({
               type="text"
               placeholder="e.g. Lunch with colleagues, Groceries, Electricity bill"
               value={note}
+              disabled={isSubmitting}
               onChange={(e) => setNote(e.target.value)}
               maxLength={120}
             />
@@ -208,13 +230,18 @@ export function ExpenseFormDialog({
             <Button
               type="button"
               variant="outline"
+              disabled={isSubmitting}
               onClick={() => onOpenChange(false)}
               className="text-xs"
             >
               Cancel
             </Button>
-            <Button type="submit" variant="primary" className="text-xs">
-              {editingExpense ? "Save Changes" : "Save Expense"}
+            <Button type="submit" variant="primary" disabled={isSubmitting} className="text-xs">
+              {isSubmitting
+                ? "Saving to Database..."
+                : editingExpense
+                ? "Save Changes"
+                : "Save Expense"}
             </Button>
           </DialogFooter>
         </form>
