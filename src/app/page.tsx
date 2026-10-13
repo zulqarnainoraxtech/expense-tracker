@@ -7,6 +7,7 @@ import { MonthlyHeader } from "@/components/dashboard/monthly-header";
 import { SummaryCards } from "@/components/dashboard/summary-cards";
 import { BudgetCard } from "@/components/dashboard/budget-card";
 import { ExpenseBreakdown } from "@/components/dashboard/expense-breakdown";
+import { MonthlyBarChart } from "@/components/dashboard/monthly-bar-chart";
 import { ExpenseList } from "@/components/expenses/expense-list";
 import { ExpenseFormDialog } from "@/components/expenses/expense-form-dialog";
 import { IncomeList } from "@/components/income/income-list";
@@ -20,7 +21,9 @@ export default function Home() {
     dbError,
     refreshData,
     currentMonth,
+    setCurrentMonth,
     displayMonth,
+    allData,
     goToPrevMonth,
     goToNextMonth,
     goToCurrentMonth,
@@ -218,6 +221,13 @@ export default function Home() {
             />
           </div>
         </div>
+
+        {/* Monthly Cash Flow & Expense Trends Bar Chart */}
+        <MonthlyBarChart
+          allData={allData}
+          currentMonth={currentMonth}
+          onSelectMonth={setCurrentMonth}
+        />
       </main>
 
       {/* Dialogs */}

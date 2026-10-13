@@ -425,6 +425,7 @@ export function useExpenseTracker() {
     currentMonth,
     setCurrentMonth,
     displayMonth: formatMonthDisplay(currentMonth),
+    allData: data,
     goToPrevMonth,
     goToNextMonth,
     goToCurrentMonth,
