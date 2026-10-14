@@ -1,0 +1,18 @@
+{
+  "default_branch": "feaure/expense-ui",
+  "branches": [
+    "feaure/expense-ui",
+    "main",
+    "origin"
+  ],
+  "parent": {
+    "feaure/expense-ui": null,
+    "main": "feaure/expense-ui",
+    "origin": "feaure/expense-ui"
+  },
+  "order": [
+    "feaure/expense-ui",
+    "main",
+    "origin"
+  ]
+}
