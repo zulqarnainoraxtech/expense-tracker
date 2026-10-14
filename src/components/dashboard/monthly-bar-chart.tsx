@@ -19,6 +19,7 @@ import {
   Wallet,
   PiggyBank,
   ChevronRight,
+  ArrowLeftRight,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ExpenseTrackerData } from "@/types/expense";
@@ -131,24 +132,48 @@ export function MonthlyBarChart({
   currentMonth,
   onSelectMonth,
 }: MonthlyBarChartProps) {
-  const [timeRange, setTimeRange] = useState<TimeRange>("6m");
+  const [timeRange, setTimeRange] = useState<TimeRange>("all");
   const [chartMode, setChartMode] = useState<ChartMode>("comparison");
 
-  // Generate continuous list of months
+  // Generate continuous list of months starting only from recorded data
   const monthlyData = useMemo(() => {
-    // Collect all month keys present in data
-    const keysSet = new Set<string>(Object.keys(allData));
+    const keysSet = new Set<string>();
 
-    // Ensure at least the last 6 months ending at currentMonth are represented
-    const [currY, currM] = currentMonth.split("-").map(Number);
-    const validCurrY = currY || new Date().getFullYear();
-    const validCurrM = currM || new Date().getMonth() + 1;
+    // Only include months that actually have recorded data (expenses, income, or budget)
+    Object.entries(allData).forEach(([key, monthObj]) => {
+      const expSum = (monthObj.expenses || []).reduce(
+        (sum, item) => sum + (Number(item.amount) || 0),
+        0
+      );
+      const incSum = (monthObj.income || []).reduce(
+        (sum, item) => sum + (Number(item.amount) || 0),
+        0
+      );
+      const hasBudget = typeof monthObj.budget === "number" && monthObj.budget > 0;
+      if (expSum > 0 || incSum > 0 || hasBudget) {
+        keysSet.add(key);
+      }
+    });
 
-    for (let i = 5; i >= 0; i--) {
-      const d = new Date(validCurrY, validCurrM - 1 - i, 1);
-      const yStr = d.getFullYear();
-      const mStr = String(d.getMonth() + 1).padStart(2, "0");
-      keysSet.add(`${yStr}-${mStr}`);
+    // Always include the currently viewed/active month
+    keysSet.add(currentMonth);
+
+    // If there are multiple months with data, fill any gaps between earliest and latest
+    const recordedKeys = Array.from(keysSet).sort();
+    if (recordedKeys.length > 1) {
+      const firstKey = recordedKeys[0];
+      const lastKey = recordedKeys[recordedKeys.length - 1];
+      const [startY, startM] = firstKey.split("-").map(Number);
+      const [endY, endM] = lastKey.split("-").map(Number);
+
+      const cur = new Date(startY, startM - 1, 1);
+      const end = new Date(endY, endM - 1, 1);
+      while (cur <= end) {
+        const yStr = cur.getFullYear();
+        const mStr = String(cur.getMonth() + 1).padStart(2, "0");
+        keysSet.add(`${yStr}-${mStr}`);
+        cur.setMonth(cur.getMonth() + 1);
+      }
     }
 
     // Sort chronologically
@@ -240,45 +265,47 @@ export function MonthlyBarChart({
           </div>
 
           {/* Controls: Mode & Time Range Filter */}
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 w-full md:w-auto">
             {/* View Mode Toggle */}
-            <div className="inline-flex rounded-lg bg-[#080e1a] border border-[#1b2844] p-0.5 text-xs">
+            <div className="w-full sm:w-auto grid grid-cols-2 rounded-xl bg-[#080e1a] border border-[#1b2844] p-1 text-xs gap-1 shadow-xs">
               <button
                 type="button"
                 onClick={() => setChartMode("comparison")}
                 className={cn(
-                  "px-2.5 py-1 rounded-md font-semibold transition-colors cursor-pointer",
+                  "flex items-center justify-center gap-2 px-4 py-3 rounded-lg text-xs font-bold transition-all cursor-pointer text-center",
                   chartMode === "comparison"
-                    ? "bg-[#1d4ed8] text-white shadow-xs"
-                    : "text-slate-400 hover:text-white"
+                    ? "bg-[#1d4ed8] text-white shadow-md"
+                    : "text-slate-400 hover:text-white hover:bg-slate-800/40"
                 )}
               >
-                Inflow vs Outflow
+                <ArrowLeftRight className="h-3.5 w-3.5 shrink-0" />
+                <span className="truncate">Inflow/Outflow</span>
               </button>
               <button
                 type="button"
                 onClick={() => setChartMode("net")}
                 className={cn(
-                  "px-2.5 py-1 rounded-md font-semibold transition-colors cursor-pointer",
+                  "flex items-center justify-center gap-2 px-4 py-3 rounded-lg text-xs font-bold transition-all cursor-pointer text-center",
                   chartMode === "net"
-                    ? "bg-[#1d4ed8] text-white shadow-xs"
-                    : "text-slate-400 hover:text-white"
+                    ? "bg-[#1d4ed8] text-white shadow-md"
+                    : "text-slate-400 hover:text-white hover:bg-slate-800/40"
                 )}
               >
-                Net Savings
+                <PiggyBank className="h-3.5 w-3.5 shrink-0" />
+                <span className="truncate">Net Savings</span>
               </button>
             </div>
 
             {/* Time Range Selector */}
-            <div className="inline-flex rounded-lg bg-[#080e1a] border border-[#1b2844] p-0.5 text-xs">
+            {/* <div className="w-full sm:w-auto grid grid-cols-3 rounded-xl bg-[#080e1a] border border-[#1b2844] p-1 text-xs gap-1 shadow-xs">
               <button
                 type="button"
                 onClick={() => setTimeRange("6m")}
                 className={cn(
-                  "px-2.5 py-1 rounded-md font-semibold transition-colors cursor-pointer",
+                  "flex items-center justify-center px-3 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer text-center",
                   timeRange === "6m"
-                    ? "bg-[#1b2844] text-[#00d68f]"
-                    : "text-slate-400 hover:text-white"
+                    ? "bg-[#1d4ed8] text-white shadow-md"
+                    : "text-slate-400 hover:text-white hover:bg-slate-800/40"
                 )}
               >
                 6M
@@ -287,10 +314,10 @@ export function MonthlyBarChart({
                 type="button"
                 onClick={() => setTimeRange("12m")}
                 className={cn(
-                  "px-2.5 py-1 rounded-md font-semibold transition-colors cursor-pointer",
+                  "flex items-center justify-center px-3 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer text-center",
                   timeRange === "12m"
-                    ? "bg-[#1b2844] text-[#00d68f]"
-                    : "text-slate-400 hover:text-white"
+                    ? "bg-[#1d4ed8] text-white shadow-md"
+                    : "text-slate-400 hover:text-white hover:bg-slate-800/40"
                 )}
               >
                 12M
@@ -299,15 +326,15 @@ export function MonthlyBarChart({
                 type="button"
                 onClick={() => setTimeRange("all")}
                 className={cn(
-                  "px-2.5 py-1 rounded-md font-semibold transition-colors cursor-pointer",
+                  "flex items-center justify-center px-3 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer text-center",
                   timeRange === "all"
-                    ? "bg-[#1b2844] text-[#00d68f]"
-                    : "text-slate-400 hover:text-white"
+                    ? "bg-[#1d4ed8] text-white shadow-md"
+                    : "text-slate-400 hover:text-white hover:bg-slate-800/40"
                 )}
               >
                 All
               </button>
-            </div>
+            </div> */}
           </div>
         </div>
 
@@ -315,7 +342,8 @@ export function MonthlyBarChart({
         <div className="mt-4 grid grid-cols-2 sm:grid-cols-4 gap-3 pt-3 border-t border-[#1b2844]/60">
           <div className="rounded-xl bg-[#080e1a]/60 border border-[#1b2844]/40 p-2.5">
             <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">
-              Total Inflow ({timeRange.toUpperCase()})
+              Total Inflow 
+              {/* ({timeRange.toUpperCase()}) */}
             </span>
             <span className="text-sm font-extrabold text-[#00d68f] mt-0.5 block truncate">
               {formatCurrency(rangeStats.totalInc)}
@@ -324,7 +352,8 @@ export function MonthlyBarChart({
 
           <div className="rounded-xl bg-[#080e1a]/60 border border-[#1b2844]/40 p-2.5">
             <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">
-              Total Outflow ({timeRange.toUpperCase()})
+              Total Outflow 
+              {/* ({timeRange.toUpperCase()}) */}
             </span>
             <span className="text-sm font-extrabold text-[#f43f5e] mt-0.5 block truncate">
               {formatCurrency(rangeStats.totalExp)}
@@ -333,7 +362,8 @@ export function MonthlyBarChart({
 
           <div className="rounded-xl bg-[#080e1a]/60 border border-[#1b2844]/40 p-2.5">
             <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">
-              Net Savings ({timeRange.toUpperCase()})
+              Net Savings
+               {/* ({timeRange.toUpperCase()}) */}
             </span>
             <span
               className={cn(
